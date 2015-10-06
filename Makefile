@@ -13,7 +13,7 @@
 
 TOOLCHAIN = arm-none-eabi-
 
-CXX = $(TOOLCHAIN)g++
+CXX = $(TOOLCHAIN)gcc
 CC = $(TOOLCHAIN)gcc
 AS = $(TOOLCHAIN)gcc -x assembler-with-cpp
 OBJCOPY = $(TOOLCHAIN)objcopy
@@ -51,7 +51,7 @@ AS_DEFS =
 
 # include directories (absolute or relative paths to additional folders with
 # headers, current folder is always included)
-INC_DIRS = include
+INC_DIRS = include FreeRTOSv8.2.2/FreeRTOS/Source/include FreeRTOSv8.2.2/FreeRTOS/Source/portable/GCC/ARM_CM4F
 
 # library directories (absolute or relative paths to additional folders with
 # libraries)
@@ -63,7 +63,7 @@ LIBS =
 
 # additional directories with source files (absolute or relative paths to
 # folders with source files, current folder is always included)
-SRCS_DIRS = src
+SRCS_DIRS = src FreeRTOSv8.2.2/FreeRTOS/Source/ FreeRTOSv8.2.2/FreeRTOS/Source/portable/GCC/ARM_CM4F
 
 # extension of C++ files
 CXX_EXT = cpp
@@ -301,6 +301,9 @@ ifneq ($(strip $(GENERATED)), )
 else
 	@echo 'Nothing to remove...'
 endif
+
+burn: all
+	sudo st-flash write $(OUT_DIR_F)/$(PROJECT).bin 0x8000000
 
 #=============================================================================#
 # global exports
