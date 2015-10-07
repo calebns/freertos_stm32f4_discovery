@@ -20,8 +20,27 @@
 #include <sys/stat.h>
 #include <FreeRTOS.h>
 #include <task.h>
+#include <queue.h>
 
 static usart_cfg_t		usartcfg;
+
+#define MAX_MSG_LEN	32
+
+#define IS_ALPHANUMERIC(x)	((((x) >= 'a') && ((x) <= 'z')) ||				\
+		(((x) >= 'A') && ((x) <= 'Z')) ||									\
+		(((x) >= '0') && ((x) <= '9')) || ((x) == ' ') || ((x) == '\t'))
+
+struct uart_msg
+{
+	char length;
+	char msg[MAX_MSG_LEN];
+};
+
+QueueHandle_t uart_msg_queue;
+
+static volatile uint32_t g_red_timeout = 1000;
+static volatile uint32_t g_green_timeout = 900;
+
 
 /**
  * @brief	Syscall for console write
@@ -56,12 +75,23 @@ _write(int file, char *ptr, int len)
 void
 IRQ_USART2(void)
 {
+	static struct uart_msg msg;
 	char t = usart_getc(&usartcfg);
 
-	if (t == '\r')
-		usart_putc(&usartcfg, '\n');
+	if (IS_ALPHANUMERIC(t)) {
+		if (msg.length < (MAX_MSG_LEN - 1))
+			msg.msg[msg.length++] = t;
+	}
 
 	usart_putc(&usartcfg, t);
+
+	if (t == '\r') {
+		usart_putc(&usartcfg, '\n');
+
+		if (uart_msg_queue)
+			xQueueSend(uart_msg_queue, &msg, 0);
+		memset(&msg, 0, sizeof(msg));
+	}
 }
 
 /**
@@ -93,22 +123,40 @@ configure_peripherals(void)
 static void
 task_uart(void* unused)
 {
+	static struct uart_msg msg;
+	BaseType_t ret;
+	char cmd[16];
+	uint32_t val;
 
-	/* Blink LED and print dot mark each iteration */
+	/* Parse commands */
 	while (1) {
-		vTaskDelay(1000);
-		usart_putc(&usartcfg, '.');
+		val = 0;
+		memset(&msg, 0, sizeof(msg));
+		ret = xQueueReceive(uart_msg_queue, &msg, portMAX_DELAY);
+		if (ret == pdTRUE) {
+			sscanf(msg.msg, "%s %d", cmd, &val);
+
+			if ((strcmp(cmd, "red") == 0) && (val != 0)) {
+				g_red_timeout = val;
+				printf("OK\n");
+			} else if ((strcmp(cmd, "green") == 0) && (val != 0)) {
+				g_green_timeout = val;
+				printf("OK\n");
+			} else {
+				printf("ERROR\n");
+			}
+		}
 	}
 }
 
 static void
 task_red(void* unused)
 {
-	/* Blink LED and print dot mark each iteration */
+	/* Blink LED */
 	while (1) {
-		vTaskDelay(1000);
+		vTaskDelay(g_red_timeout);
 		gpio_pin_set(LED_GPIO, LED_pin_red, 1);
-		vTaskDelay(1000);
+		vTaskDelay(g_red_timeout);
 		gpio_pin_set(LED_GPIO, LED_pin_red, 0);
 	}
 }
@@ -116,11 +164,11 @@ task_red(void* unused)
 static void
 task_green(void* unused)
 {
-	/* Blink LED and print dot mark each iteration */
+	/* Blink LED */
 	while (1) {
-		vTaskDelay(800);
+		vTaskDelay(g_green_timeout);
 		gpio_pin_set(LED_GPIO, LED_pin_green, 1);
-		vTaskDelay(800);
+		vTaskDelay(g_green_timeout);
 		gpio_pin_set(LED_GPIO, LED_pin_green, 0);
 	}
 }
@@ -138,8 +186,15 @@ main(void)
 	/* Be nice, welcome! */
 	printf("\nSTM32F4 discovery: Welcome!\n");
 
+	/* Create UART queue */
+	uart_msg_queue = xQueueCreate(8, sizeof(struct uart_msg));
+	if (uart_msg_queue == NULL) {
+		printf("ERROR: failed to initialize queue\n");
+		return (-1);
+	}
+
 	/* Create the 'echo' task, which is also defined within this file. */
-	xTaskCreate(task_uart, "UART", configMINIMAL_STACK_SIZE, NULL, 16, NULL);
+	xTaskCreate(task_uart, "UART", 1024, NULL, 16, NULL);
 	xTaskCreate(task_red, "LED: RED", configMINIMAL_STACK_SIZE, NULL, 250, NULL);
 	xTaskCreate(task_green, "LED: GREEN", configMINIMAL_STACK_SIZE, NULL, 250, NULL);
 
