@@ -53,6 +53,17 @@ _write(int file, char *ptr, int len)
 	return len;
 }
 
+void
+IRQ_USART2(void)
+{
+	char t = usart_getc(&usartcfg);
+
+	if (t == '\r')
+		usart_putc(&usartcfg, '\n');
+
+	usart_putc(&usartcfg, t);
+}
+
 /**
  * @brief Configure peripherals
  *
@@ -75,20 +86,42 @@ configure_peripherals(void)
 	pincfg.mode = GPIO_CFG_MODE_OUTPUT;
 	pincfg.speed = GPIO_CFG_SPEED_25MHZ;
 	pincfg.type = GPIO_CFG_TYPE_PP;
-	gpio_pin_cfg(LED_GPIO, LED_pin, &pincfg);
+	gpio_pin_cfg(LED_GPIO, LED_pin_red, &pincfg);
+	gpio_pin_cfg(LED_GPIO, LED_pin_green, &pincfg);
 }
 
 static void
-task1(void* unused)
+task_uart(void* unused)
 {
 
 	/* Blink LED and print dot mark each iteration */
 	while (1) {
-		sysclk_delay(10000000);
-		gpio_pin_set(LED_GPIO, LED_pin, 1);
-		sysclk_delay(10000000);
-		gpio_pin_set(LED_GPIO, LED_pin, 0);
+		vTaskDelay(1000);
 		usart_putc(&usartcfg, '.');
+	}
+}
+
+static void
+task_red(void* unused)
+{
+	/* Blink LED and print dot mark each iteration */
+	while (1) {
+		vTaskDelay(1000);
+		gpio_pin_set(LED_GPIO, LED_pin_red, 1);
+		vTaskDelay(1000);
+		gpio_pin_set(LED_GPIO, LED_pin_red, 0);
+	}
+}
+
+static void
+task_green(void* unused)
+{
+	/* Blink LED and print dot mark each iteration */
+	while (1) {
+		vTaskDelay(800);
+		gpio_pin_set(LED_GPIO, LED_pin_green, 1);
+		vTaskDelay(800);
+		gpio_pin_set(LED_GPIO, LED_pin_green, 0);
 	}
 }
 
@@ -106,7 +139,9 @@ main(void)
 	printf("\nSTM32F4 discovery: Welcome!\n");
 
 	/* Create the 'echo' task, which is also defined within this file. */
-	xTaskCreate(task1, "Echo", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+	xTaskCreate(task_uart, "UART", configMINIMAL_STACK_SIZE, NULL, 16, NULL);
+	xTaskCreate(task_red, "LED: RED", configMINIMAL_STACK_SIZE, NULL, 250, NULL);
+	xTaskCreate(task_green, "LED: GREEN", configMINIMAL_STACK_SIZE, NULL, 250, NULL);
 
 	/* Start the scheduler. */
 	vTaskStartScheduler();

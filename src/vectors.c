@@ -218,5 +218,6 @@ vector_table_funcptr vectors[] = {
 static void
 __Generic_Handler(void)
 {
+
 	while (1) {};
 }
