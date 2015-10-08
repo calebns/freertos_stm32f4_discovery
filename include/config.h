@@ -33,7 +33,8 @@
 #define MAX_FLASH_FREQ		30000000UL // calculate wait_states (30M is valid for 2.7V to 3.6V voltage range, use 24M for 2.4V to 2.7V, 18M for 2.1V to 2.4V or 16M for  1.8V to 2.1V)
 
 #define LED_GPIO							GPIOD		///< GPIO port to which the LED is connected
-#define LED_pin								13			///< pin number of the LED
+#define LED_pin_green						12			///< pin number of the LED
+#define LED_pin_red							13			///< pin number of the LED
 
 
 #endif /* CONFIG_H_ */

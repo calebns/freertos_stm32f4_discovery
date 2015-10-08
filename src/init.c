@@ -19,7 +19,7 @@ static void		fpu_enable(void);
 
 extern void		main(void);
 
-
+#define AIRC_VECTKEY_MASK    ((u32)0x05FA0000)
 
 /**
  * @brief Enables FPU
@@ -48,6 +48,13 @@ low_level_init(void)
 
 	/* Perform low-level initialization */
 	fpu_enable();
+
+	/* Set NVIC vector table to FLASH */
+	SCB->VTOR = 0x8000000;
+
+	/* Set the PRIGROUP[10:8] bits according to NVIC_PriorityGroup_4 value */
+	SCB->AIRCR = AIRC_VECTKEY_MASK | 0x300;
+
 	sysclk_init();
 
 	/* Run user entry function */

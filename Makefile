@@ -13,7 +13,7 @@
 
 TOOLCHAIN = arm-none-eabi-
 
-CXX = $(TOOLCHAIN)g++
+CXX = $(TOOLCHAIN)gcc
 CC = $(TOOLCHAIN)gcc
 AS = $(TOOLCHAIN)gcc -x assembler-with-cpp
 OBJCOPY = $(TOOLCHAIN)objcopy
@@ -301,6 +301,9 @@ ifneq ($(strip $(GENERATED)), )
 else
 	@echo 'Nothing to remove...'
 endif
+
+burn: all
+	sudo st-flash write $(OUT_DIR_F)/$(PROJECT).bin 0x8000000
 
 #=============================================================================#
 # global exports

@@ -11,6 +11,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <core/stm32f4xx.h>
 #include <config.h>
 #include <sysclk.h>
@@ -18,7 +19,57 @@
 #include <usart.h>
 #include <sys/stat.h>
 
-static usart_cfg_t		usartcfg;
+#define MAX_MSG_LEN	32
+#define IS_ALPHANUMERIC(x)	((((x) >= 'a') && ((x) <= 'z')) ||				\
+		(((x) >= 'A') && ((x) <= 'Z')) ||									\
+		(((x) >= '0') && ((x) <= '9')) || ((x) == ' ') || ((x) == '\t'))
+
+static volatile uint32_t	g_red_timeout = 1000;
+static volatile uint32_t	g_green_timeout = 900;
+static usart_cfg_t			usartcfg;
+static uint64_t				g_ticks;
+
+void
+EXCV_SysTick(void)
+{
+	g_ticks++;
+}
+
+void
+IRQ_USART2(void)
+{
+	static char msg[MAX_MSG_LEN];
+	static uint8_t length;
+	char t = usart_getc(&usartcfg);
+	char cmd[32];
+	uint32_t val = 0;
+
+	if (IS_ALPHANUMERIC(t)) {
+		if (length < (MAX_MSG_LEN - 1))
+			msg[length++] = t;
+	}
+
+	usart_putc(&usartcfg, t);
+
+	if (t == '\r') {
+		usart_putc(&usartcfg, '\n');
+
+		sscanf(msg, "%s %lu", cmd, &val);
+
+		if ((strcmp(cmd, "red") == 0) && (val != 0)) {
+			g_red_timeout = val;
+			printf("OK\n");
+		} else if ((strcmp(cmd, "green") == 0) && (val != 0)) {
+			g_green_timeout = val;
+			printf("OK\n");
+		} else {
+			printf("ERROR\n");
+		}
+
+		memset(msg, 0, sizeof(msg));
+		length = 0;
+	}
+}
 
 /**
  * @brief	Syscall for console write
@@ -42,7 +93,7 @@ _write(int file, char *ptr, int len)
 
 	for (todo = 0; todo < len; todo++) {
 		usart_putc(&usartcfg, *ptr);
-		/* Froce sending CR with new line */
+		/* Force sending CR with new line */
 		if (*ptr == '\n')
 			usart_putc(&usartcfg, '\r');
 		ptr++;
@@ -66,13 +117,33 @@ configure_peripherials(void)
 
 	usartcfg.device = USART_DEVICE_2;
 	usartcfg.baudrate = 115200;
-
 	usart_init(&usartcfg);
 
 	pincfg.mode = GPIO_CFG_MODE_OUTPUT;
 	pincfg.speed = GPIO_CFG_SPEED_25MHZ;
 	pincfg.type = GPIO_CFG_TYPE_PP;
-	gpio_pin_cfg(LED_GPIO, LED_pin, &pincfg);
+	gpio_pin_cfg(LED_GPIO, LED_pin_red, &pincfg);
+	gpio_pin_cfg(LED_GPIO, LED_pin_green, &pincfg);
+}
+
+void
+process(void)
+{
+	uint8_t red_state = 0, green_state = 0;
+	uint64_t green_last = 0, red_last = 0;
+
+	while (1) {
+		if (g_ticks - green_last > g_green_timeout) {
+			green_last = g_ticks;
+			gpio_pin_set(LED_GPIO, LED_pin_green, green_state);
+			green_state = 1 - green_state;
+		}
+		if (g_ticks - red_last > g_red_timeout) {
+			red_last = g_ticks;
+			gpio_pin_set(LED_GPIO, LED_pin_red, red_state);
+			red_state = 1 - red_state;
+		}
+	}
 }
 
 /**
@@ -85,16 +156,17 @@ main(void)
 	/* Configure system peripherals */
 	configure_peripherials();
 
+	/* Configure system tick */
+	SysTick_Config(FREQUENCY/1000);
+
 	/* Be nice, welcome! */
 	printf("\nSTM32F4 discovery: Welcome!\n");
 
-	/* Blink LED and print dot mark each iteration */
-	while (1) {
-		sysclk_delay(10000000);
-		gpio_pin_set(LED_GPIO, LED_pin, 1);
-		sysclk_delay(10000000);
-		gpio_pin_set(LED_GPIO, LED_pin, 0);
-		usart_putc(&usartcfg, '.');
-	}
+	process();
+
+	/* Should not go here... */
+	for (;;);
+
+	return (0);
 }
 

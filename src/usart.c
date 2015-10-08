@@ -64,6 +64,7 @@ usart_init(usart_cfg_t *cfg)
 		gpio_pin_cfg(GPIOA, 2, &pincfg);
 		gpio_pin_cfg(GPIOA, 3, &pincfg);
 		RCC->APB1ENR |= RCC_APB1ENR_USART2EN;
+		NVIC_EnableIRQ(USART2_IRQn);
 		break;
 	case USART_DEVICE_3:
 		sysclk = sysclk_get_clock(SYSCLK_CLOCK_APB1);
@@ -89,7 +90,7 @@ usart_init(usart_cfg_t *cfg)
 
 	/* Calculate bitrate, oversampling by 16 */
 	usart->BRR = (sysclk + (cfg->baudrate / 2)) / cfg->baudrate;
-	usart->CR1 = USART_CR1_UE | USART_CR1_RE | USART_CR1_TE;
+	usart->CR1 = USART_CR1_UE | USART_CR1_RE | USART_CR1_TE | USART_CR1_RXNEIE;
 }
 
 /**
@@ -109,4 +110,16 @@ usart_putc(usart_cfg_t *cfg, const uint32_t chr)
 	cfg->regs->DR = chr;
 }
 
+/**
+ * @brief	Receive single character from UART
+ *
+ * @param cfg	Configuration structure of the UART device
+ *
+ * @return		Character
+ */
+uint8_t
+usart_getc(usart_cfg_t *cfg)
+{
+	return (cfg->regs->DR);
+}
 

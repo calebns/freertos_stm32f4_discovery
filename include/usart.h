@@ -32,6 +32,7 @@ typedef struct {
 
 void usart_init(usart_cfg_t *cfg);
 void usart_putc(usart_cfg_t *cfg, const uint32_t chr);
+uint8_t usart_getc(usart_cfg_t *cfg);
 
 
 #endif /* USART_H_ */
